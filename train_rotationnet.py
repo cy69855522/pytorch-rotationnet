@@ -291,7 +291,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
         target_ = torch.LongTensor( target.size(0) * nview )
 
         # compute output
-        output = model(input_var) # [B=(b * V), (C + 1) * V]
+        output = model(input_var) # [B=(b * P), (C + 1) * V]
         num_classes = int( output.size( 1 ) / nview ) - 1 # C
         output = output.view( -1, num_classes + 1 ) # [B * V, C + 1]
 
@@ -302,16 +302,16 @@ def train(train_loader, model, criterion, optimizer, epoch):
         # divide object scores by the scores for "incorrect view label" (see Eq.(5))
         output_ = output_[ :, :-1 ] - torch.t( output_[ :, -1 ].repeat( 1, output_.size(1)-1 ).view( output_.size(1)-1, -1 ) ) # [B * V, C] 同 output_[:, :-1] - output[:,-1:]
         # reshape output matrix
-        output_ = output_.view( -1, nview * nview, num_classes ) # [b, V * V, C]
+        output_ = output_.view( -1, nview * nview, num_classes ) # [b, P * V, C]
         output_ = output_.data.cpu().numpy()
-        output_ = output_.transpose( 1, 2, 0 ) # [V * V, C, b]
+        output_ = output_.transpose( 1, 2, 0 ) # [P * V, C, b]
         # initialize target labels with "incorrect view label"
         for j in range(target_.size(0)): # B * V 的向量，所有值为40
             target_[ j ] = num_classes
         # compute scores for all the candidate poses (see Eq.(5))
-        scores = np.zeros( ( vcand.shape[ 0 ], num_classes, nsamp ) ) # [V, C, b]
-        for j in range(vcand.shape[0]): # V
-            for k in range(vcand.shape[1]): # 
+        scores = np.zeros( ( vcand.shape[ 0 ], num_classes, nsamp ) ) # [P, C, b]
+        for j in range(vcand.shape[0]): # P
+            for k in range(vcand.shape[1]): # V
                 scores[ j ] = scores[ j ] + output_[ vcand[ j ][ k ] * nview + k ]
         # for each sample #n, determine the best pose that maximizes the score for the target class (see Eq.(2))
         for n in range( nsamp ):
@@ -367,10 +367,10 @@ def validate(val_loader, model, criterion):
 
         # log_softmax and reshape output
         num_classes = int( output.size( 1 ) / nview ) - 1
-        output = output.view( -1, num_classes + 1 )
+        output = output.view( -1, num_classes + 1 ) # [B * V, C + 1]
         output = torch.nn.functional.log_softmax( output )
-        output = output[ :, :-1 ] - torch.t( output[ :, -1 ].repeat( 1, output.size(1)-1 ).view( output.size(1)-1, -1 ) )
-        output = output.view( -1, nview * nview, num_classes )
+        output = output[ :, :-1 ] - torch.t( output[ :, -1 ].repeat( 1, output.size(1)-1 ).view( output.size(1)-1, -1 ) ) # [B * V, C]
+        output = output.view( -1, nview * nview, num_classes ) # [B, V * V, C]
 
         # measure accuracy and record loss
         prec1, prec5 = my_accuracy(output.data, target, topk=(1, 5))
